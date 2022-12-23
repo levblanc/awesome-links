@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   LoadingOverlay,
   Alert,
@@ -12,22 +13,49 @@ import { gql, useQuery } from '@apollo/client';
 import { IconAlertCircle } from '@tabler/icons';
 
 const AllLinksQuery = gql`
-  query {
-    links {
-      id
-      title
-      url
-      description
-      imageUrl
-      category
+  query allLinksQuery($first: Int, $after: String) {
+    links(first: $first, after: $after) {
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+      edges {
+        cursor
+        node {
+          title
+          url
+          description
+          imageUrl
+          category
+        }
+      }
     }
   }
 `;
 
 function Home() {
-  const { data, error, loading } = useQuery(AllLinksQuery);
+  const { data, error, loading, fetchMore } = useQuery(AllLinksQuery, {
+    variables: { first: 2 },
+  });
 
-  console.log('data', data);
+  const loadNextPage = () => {
+    console.log('loading next page...');
+    fetchMore({
+      variables: {
+        after: data?.links.pageInfo.endCursor,
+      },
+      updateQuery: (prevResult, { fetchMoreResult }) => {
+        fetchMoreResult.links.edges = [
+          ...prevResult.links.edges,
+          ...fetchMoreResult.links.edges,
+        ];
+
+        console.log(fetchMoreResult);
+        return fetchMoreResult;
+      },
+    });
+  };
+
   return (
     <>
       {error ? (
@@ -39,11 +67,16 @@ function Home() {
           {error.message}
         </Alert>
       ) : (
-        <>
-          <LoadingOverlay visible={loading} overlayBlur={2} />
-          {data &&
-            data.links.length &&
-            data.links.map((item, index: number) => {
+        <Box sx={{ padding: 20 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContents: 'space-between',
+            }}
+          >
+            <LoadingOverlay visible={loading} overlayBlur={2} />
+            {data?.links.edges.map(({ node }, index: number) => {
               return (
                 <Card
                   sx={{ width: 320, margin: 10 }}
@@ -54,16 +87,16 @@ function Home() {
                   key={index}
                 >
                   <Card.Section>
-                    <Image src={item.imageUrl} height={240} alt={item.title} />
+                    <Image src={node.imageUrl} height={240} alt={node.title} />
                   </Card.Section>
                   <Group position='apart' mt='md' mb='xs'>
-                    <Text weight={500}>{item.title}</Text>
+                    <Text weight={500}>{node.title}</Text>
                     <Badge color='pink' variant='light'>
-                      {item.category}
+                      {node.category}
                     </Badge>
                   </Group>
                   <Text size='sm' color='dimmed'>
-                    {item.description}
+                    {node.description}
                   </Text>
                   <Button
                     variant='light'
@@ -77,7 +110,16 @@ function Home() {
                 </Card>
               );
             })}
-        </>
+          </Box>
+
+          <Box sx={{ padding: 20, textAlign: 'center' }}>
+            {data?.links.pageInfo.hasNextPage ? (
+              <Button onClick={loadNextPage}>More</Button>
+            ) : (
+              <Text color='dimmed'>You've reached the end.</Text>
+            )}
+          </Box>
+        </Box>
       )}
     </>
   );
